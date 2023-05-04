@@ -111,7 +111,6 @@ def main():
                     except telegram.TelegramError:
                         logger.error('Сообщение не отправлено')
                 else:
-                    print(homework)
                     status = parse_status(*homework)
                     if status != last_status:
                         try:
