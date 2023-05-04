@@ -106,10 +106,7 @@ def main():
             if homework:
                 homework = response.get('homeworks')
                 if len(homework) == 0:
-                    try:
-                        send_message(bot, 'Статус работы без изменений')
-                    except telegram.TelegramError:
-                        logger.error('Сообщение не отправлено')
+                    send_message(bot, 'Статус работы без изменений')
                 else:
                     status = parse_status(*homework)
                     if status != last_status:
