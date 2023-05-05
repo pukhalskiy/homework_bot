@@ -3,10 +3,12 @@ import logging
 import os
 import sys
 import time
+
 import requests
 import telegram
 
 from http import HTTPStatus
+
 from requests import RequestException
 from dotenv import load_dotenv
 
@@ -41,8 +43,16 @@ logger = logging.getLogger(__name__)
 
 def check_tokens():
     """Проверка данных в константах."""
-    if None in (PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN):
-        logger.critical("Один или несколько токенов не найдены.")
+    missing_tokens = []
+    if PRACTICUM_TOKEN is None:
+        missing_tokens.append("PRACTICUM_TOKEN")
+    if TELEGRAM_CHAT_ID is None:
+        missing_tokens.append("TELEGRAM_CHAT_ID")
+    if TELEGRAM_TOKEN is None:
+        missing_tokens.append("TELEGRAM_TOKEN")
+    if missing_tokens:
+        logger.critical('Не найдены следующие '
+                        'токены: %s', ', '.join(missing_tokens))
         sys.exit()
     logger.info("Все токены найдены.")
 
@@ -60,13 +70,13 @@ def get_api_answer(timestamp):
         response = requests.get(ENDPOINT,
                                 headers=HEADERS,
                                 params={'from_date': timestamp})
-        if response.status_code != HTTPStatus.OK:
-            raise ValueError(
-                f'Эндпоин недоступен. Код ответа: {response.status_code}'
-            )
-        return response.json()
     except RequestException:
-        logger.exception(f'Ошибка при запросе к эндпоинту {ENDPOINT}')
+        logger.error(f'Ошибка при запросе к эндпоинту {ENDPOINT}')
+    if response.status_code != HTTPStatus.OK:
+        raise ValueError(
+            f'Эндпоин недоступен. Код ответа: {response.status_code}'
+        )
+    return response.json()
 
 
 def check_response(response):
@@ -76,7 +86,6 @@ def check_response(response):
     homework = response.get('homeworks')
     if not isinstance(homework, list):
         raise TypeError('В ответе от API нет списка.')
-    return True
 
 
 def parse_status(homework):
@@ -98,25 +107,20 @@ def main():
         raise ValueError('Ошибка в константах с токенами.')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    last_status = ''
+    last_status = []
     while True:
         try:
             response = get_api_answer(timestamp)
             homework = check_response(response)
-            if homework:
-                homework = response.get('homeworks')
-                if len(homework) == 0:
-                    send_message(bot, 'Статус работы без изменений')
-                else:
-                    status = parse_status(*homework)
-                    if status != last_status:
-                        try:
-                            send_message(bot, status)
-                        except telegram.TelegramError:
-                            logger.error('Сообщение не отправленно.')
+            homework = response.get('homeworks')
+            if not homework:
+                send_message(bot, 'Статус работы без изменений')
             else:
-                message = 'Статус работы без изменений'
-                logger.error(message)
+                status = parse_status(*homework)
+                if status != last_status:
+                    send_message(bot, status)
+        except telegram.TelegramError as error:
+            logger.error(f'Сообщение не отправлено. Ошибка: {error}')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
