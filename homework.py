@@ -67,7 +67,6 @@ def get_api_answer(timestamp):
     """Получение информации от Практикума."""
     timestamp = int(time.time())
     max_retries = 3
-    sleep_time = 1
     for i in range(max_retries):
         try:
             response = requests.get(ENDPOINT,
@@ -76,11 +75,9 @@ def get_api_answer(timestamp):
             response.raise_for_status()
         except RequestException as error:
             logger.error(f'Ошибка: {error}')
-            time.sleep(sleep_time)
             continue
         if response.status_code == HTTPStatus.OK:
             return response.json()
-        time.sleep(sleep_time)
     raise ValueError(f'Не удалось получить ответ от API'
                      f' после {max_retries} попыток')
 
