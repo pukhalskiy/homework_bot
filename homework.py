@@ -8,8 +8,8 @@ import requests
 import telegram
 
 from http import HTTPStatus
-
 from requests import RequestException
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,17 +43,17 @@ logger = logging.getLogger(__name__)
 
 def check_tokens():
     """Проверка данных в константах."""
-    missing_tokens = []
-    if PRACTICUM_TOKEN is None:
-        missing_tokens.append("PRACTICUM_TOKEN")
-    if TELEGRAM_CHAT_ID is None:
-        missing_tokens.append("TELEGRAM_CHAT_ID")
-    if TELEGRAM_TOKEN is None:
-        missing_tokens.append("TELEGRAM_TOKEN")
-    if missing_tokens:
-        logger.critical('Не найдены следующие '
-                        'токены: %s', ', '.join(missing_tokens))
-        sys.exit()
+    tokens_are_missing = False
+    for token_name in ('PRACTICUM_TOKEN',
+                       'TELEGRAM_CHAT_ID',
+                       'TELEGRAM_TOKEN'):
+        if not globals().get(token_name):
+            tokens_are_missing = True
+            logger.error(f"Отсутствует {token_name}")
+    if tokens_are_missing:
+        logger.critical('Не найдены некоторые токены,'
+                        ' программа будет завершена.')
+        exit()
     logger.info("Все токены найдены.")
 
 
@@ -66,17 +66,23 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Получение информации от Практикума."""
     timestamp = int(time.time())
-    try:
-        response = requests.get(ENDPOINT,
-                                headers=HEADERS,
-                                params={'from_date': timestamp})
-    except RequestException:
-        logger.error(f'Ошибка при запросе к эндпоинту {ENDPOINT}')
-    if response.status_code != HTTPStatus.OK:
-        raise ValueError(
-            f'Эндпоин недоступен. Код ответа: {response.status_code}'
-        )
-    return response.json()
+    max_retries = 3
+    sleep_time = 1
+    for i in range(max_retries):
+        try:
+            response = requests.get(ENDPOINT,
+                                    headers=HEADERS,
+                                    params={'from_date': timestamp})
+            response.raise_for_status()
+        except RequestException as error:
+            logger.error(f'Ошибка: {error}')
+            time.sleep(sleep_time)
+            continue
+        if response.status_code == HTTPStatus.OK:
+            return response.json()
+        time.sleep(sleep_time)
+    raise ValueError(f'Не удалось получить ответ от API'
+                     f' после {max_retries} попыток')
 
 
 def check_response(response):
@@ -90,8 +96,9 @@ def check_response(response):
 
 def parse_status(homework):
     """Получение статуса проверки домашней работы."""
-    if 'homework_name' not in homework:
-        raise KeyError('Отсутствует ключ homework_name')
+    for required_key in ['homework_name', 'status']:
+        if required_key not in homework:
+            raise KeyError(f'Отсутствует ключ {required_key}')
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_VERDICTS:
@@ -102,21 +109,20 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    call_check_tokens = check_tokens()
-    if call_check_tokens is False:
-        raise ValueError('Ошибка в константах с токенами.')
+    check_tokens()
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     last_status = []
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            homework = response.get('homeworks')
-            if not homework:
+            check_response(response)
+            homeworks = response.get('homeworks')
+            if not homeworks:
                 send_message(bot, 'Статус работы без изменений')
             else:
-                status = parse_status(*homework)
+                homework, *_ = homeworks
+                status = parse_status(homework)
                 if status != last_status:
                     send_message(bot, status)
         except telegram.TelegramError as error:
