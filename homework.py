@@ -3,12 +3,11 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
 
 import requests
+from requests.exceptions import RequestException
 import telegram
-
-from http import HTTPStatus
-from requests import RequestException
 
 from dotenv import load_dotenv
 
@@ -66,20 +65,16 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Получение информации от Практикума."""
     timestamp = int(time.time())
-    max_retries = 3
-    for i in range(max_retries):
-        try:
-            response = requests.get(ENDPOINT,
-                                    headers=HEADERS,
-                                    params={'from_date': timestamp})
-            response.raise_for_status()
-        except RequestException as error:
-            logger.error(f'Ошибка: {error}')
-            continue
+    try:
+        response = requests.get(ENDPOINT,
+                                headers=HEADERS,
+                                params={'from_date': timestamp})
+        response.raise_for_status()
         if response.status_code == HTTPStatus.OK:
             return response.json()
-    raise ValueError(f'Не удалось получить ответ от API'
-                     f' после {max_retries} попыток')
+    except RequestException as error:
+        logger.error(f'Ошибка: {error}')
+    raise ValueError('Не удалось получить ответ от API')
 
 
 def check_response(response):
