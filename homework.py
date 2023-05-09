@@ -9,9 +9,6 @@ import requests
 from requests.exceptions import RequestException
 import telegram
 
-from http import HTTPStatus
-from requests import RequestException
-
 from dotenv import load_dotenv
 
 load_dotenv()
