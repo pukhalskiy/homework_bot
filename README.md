@@ -12,7 +12,7 @@ python telegram bot
 ## Как запустить проект
 Клонировать репозиторий и перейти в него в командной строке:
 ```
-git@github.com:mariyabykova/hw_python_oop.git
+git@github.com:pukhalskiy/homework_bot.git
 ```
 Создать и активировать виртуальное окружение:
 ```
